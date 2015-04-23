@@ -1,4 +1,4 @@
-package jedict
+package dictionary
 
 import (
 	"encoding/xml"
@@ -7,7 +7,7 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/jordwest/go-jedict/storage"
+	"github.com/jordwest/go-jedict/dictionary/storage"
 )
 
 type jmDictXmlDoc struct {
@@ -77,13 +77,23 @@ func (e *entry) convertToStorageEntry() storage.Entry {
 	return sEntry
 }
 
-func ReadXMLIntoStorage(filename string, provider storage.StorageWriter) error {
+func ReadXMLIntoStorage(filename string, provider storage.StorageWriter, progress chan float32) error {
 	reader, err := os.Open(filename)
 	defer reader.Close()
 
 	if err != nil {
 		fmt.Printf("Error opening dictionary xml file: %s\n", err)
 		return err
+	}
+
+	var fileSize int64 = 0
+	if progress != nil {
+		fileInfo, err := reader.Stat()
+		if err != nil {
+			return err
+		}
+		fileSize = fileInfo.Size()
+		defer close(progress)
 	}
 
 	decoder := xml.NewDecoder(reader)
@@ -114,7 +124,11 @@ func ReadXMLIntoStorage(filename string, provider storage.StorageWriter) error {
 				fmt.Errorf("Error storing entry: %s\n %+v", err, entry)
 				return err
 			}
-			if provider.UncommittedEntries() >= 5000 {
+			if provider.UncommittedEntries() >= 1000 {
+				if progress != nil {
+					currentLocation := decoder.InputOffset()
+					progress <- (float32(currentLocation) / float32(fileSize))
+				}
 				err = provider.Commit()
 				if err != nil {
 					fmt.Errorf("Error committing entries: %s", err)
@@ -130,8 +144,12 @@ func ReadXMLIntoStorage(filename string, provider storage.StorageWriter) error {
 		return err
 	}
 
-	return nil
+	if progress != nil {
+		// 100% complete
+		progress <- 1.0
+	}
 
+	return nil
 }
 
 func FindEntities(d *xml.Directive) (map[string]string, error) {

@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -118,7 +117,6 @@ func (s *PostgresStorageProvider) Commit() error {
 			return err
 		}
 	}
-	fmt.Printf("Saved %d entries\n", s.UncommittedEntries())
 	s.uncommittedEntries = make([]Entry, 0)
 
 	return nil
